@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLACKPINK Quiz - Conversions m ↔ dm</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Start screen -->
+  <div id="start-screen" class="screen active">
+    <div class="logo">💗 BLACKPINK 💗</div>
+    <h1>Quiz Conversions</h1>
+    <p class="subtitle">m ↔ dm ↔ cm ↔ mm</p>
+    <button id="btn-start" class="btn-pink">Commencer 🎤</button>
+  </div>
+
+  <!-- Quiz screen -->
+  <div id="quiz-screen" class="screen">
+    <div class="logo quiz-logo">💗 BLACKPINK 💗</div>
+    <div class="robot" id="robot">
+      <div class="robot-face">
+        <div class="robot-eyes">
+          <span class="robot-eye left" id="robot-eye-l">◉</span>
+          <span class="robot-eye right" id="robot-eye-r">◉</span>
+        </div>
+        <div class="robot-mouth" id="robot-mouth">‿</div>
+      </div>
+      <div class="robot-label" id="robot-label">C'est parti !</div>
+    </div>
+    <div class="top-bar">
+      <div class="score-display">⭐ <span id="score">0</span></div>
+      <div class="question-count">Q<span id="q-num">1</span>/<span id="q-total">10</span></div>
+      <div class="timer-display" id="timer">⏱ 20s</div>
+    </div>
+    <div class="timer-bar"><div id="timer-bar-fill" class="timer-bar-fill"></div></div>
+
+    <div class="quiz-layout">
+      <div class="celebration-overlay hidden" id="celebration">
+        <div class="celebration-content">
+          <div class="celebration-text">🎉 Bravo ! 🎉</div>
+          <img id="celebration-gif" class="celebration-gif" src="" alt="Blackpink celebration">
+        </div>
+      </div>
+      <div class="quiz-main">
+        <div class="question-card">
+          <p id="question-text" class="question-text"></p>
+          <div class="answer-area">
+            <input type="number" id="answer-input" class="answer-input" placeholder="Ta réponse..." autocomplete="off">
+            <span id="answer-unit" class="answer-unit"></span>
+          </div>
+          <button id="btn-validate" class="btn-pink">Valider ✨</button>
+          <div class="numpad" id="numpad">
+            <button class="numpad-btn" data-val="1">1</button>
+            <button class="numpad-btn" data-val="2">2</button>
+            <button class="numpad-btn" data-val="3">3</button>
+            <button class="numpad-btn" data-val="4">4</button>
+            <button class="numpad-btn" data-val="5">5</button>
+            <button class="numpad-btn" data-val="6">6</button>
+            <button class="numpad-btn" data-val="7">7</button>
+            <button class="numpad-btn" data-val="8">8</button>
+            <button class="numpad-btn" data-val="9">9</button>
+            <button class="numpad-btn numpad-del" data-val="del">⌫</button>
+            <button class="numpad-btn" data-val="0">0</button>
+            <button class="numpad-btn numpad-dot" data-val=".">.</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="retry-panel" id="retry-panel">
+        <h3>🔄 À revoir</h3>
+        <ul id="retry-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- End screen -->
+  <div id="end-screen" class="screen">
+    <div class="logo">💗 BLACKPINK 💗</div>
+    <h2 id="end-message"></h2>
+    <p id="end-score"></p>
+    <button id="btn-restart" class="btn-pink">Rejouer 🎤</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
