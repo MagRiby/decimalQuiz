@@ -11,25 +11,49 @@
 <body>
   <!-- Start screen -->
   <div id="start-screen" class="screen active">
-    <div class="logo">💗 BLACKPINK 💗</div>
     <h1>Quiz Conversions</h1>
     <p class="subtitle">m ↔ dm ↔ cm ↔ mm</p>
+
+    <div class="config-panel">
+      <label class="config-label">
+        Nombre de questions
+        <select id="cfg-questions" class="config-select">
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="30">30</option>
+          <option value="40" selected>40</option>
+          <option value="50">50</option>
+        </select>
+      </label>
+      <label class="config-label">
+        Temps par question
+        <select id="cfg-time-per-q" class="config-select">
+          <option value="0">Pas de limite</option>
+          <option value="10">10s</option>
+          <option value="15">15s</option>
+          <option value="20" selected>20s</option>
+          <option value="30">30s</option>
+        </select>
+      </label>
+      <label class="config-label">
+        Durée globale (minutes)
+        <select id="cfg-global-time" class="config-select">
+          <option value="0">Illimitée</option>
+          <option value="5">5 min</option>
+          <option value="10" selected>10 min</option>
+          <option value="15">15 min</option>
+          <option value="20">20 min</option>
+          <option value="30">30 min</option>
+        </select>
+      </label>
+    </div>
+
     <button id="btn-start" class="btn-pink">Commencer 🎤</button>
   </div>
 
   <!-- Quiz screen -->
   <div id="quiz-screen" class="screen">
     <div class="logo quiz-logo">💗 BLACKPINK 💗</div>
-    <div class="robot" id="robot">
-      <div class="robot-face">
-        <div class="robot-eyes">
-          <span class="robot-eye left" id="robot-eye-l">◉</span>
-          <span class="robot-eye right" id="robot-eye-r">◉</span>
-        </div>
-        <div class="robot-mouth" id="robot-mouth">‿</div>
-      </div>
-      <div class="robot-label" id="robot-label">C'est parti !</div>
-    </div>
     <div class="top-bar">
       <div class="score-display">⭐ <span id="score">0</span></div>
       <div class="question-count">Q<span id="q-num">1</span>/<span id="q-total">10</span></div>
@@ -69,9 +93,12 @@
         </div>
       </div>
 
-      <div class="retry-panel" id="retry-panel">
-        <h3>🔄 À revoir</h3>
-        <ul id="retry-list"></ul>
+      <div class="right-column">
+        <div class="global-timer-num" id="global-timer"></div>
+        <div class="retry-panel" id="retry-panel">
+          <h3>🔄 À revoir</h3>
+          <ul id="retry-list"></ul>
+        </div>
       </div>
     </div>
   </div>

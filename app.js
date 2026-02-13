@@ -1,7 +1,115 @@
 (() => {
-  // Config
-  const TOTAL_QUESTIONS = 40;
-  const TIME_PER_QUESTION = 20; // seconds
+  // Config — set from start screen
+  let TOTAL_QUESTIONS = 40;
+  let TIME_PER_QUESTION = 20; // 0 = no per-question timer
+  let GLOBAL_TIME = 600; // seconds, 0 = unlimited
+
+  // === AUDIO ENGINE ===
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  function playNote(freq, type, start, dur, vol, vibrato) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, start);
+    if (vibrato) {
+      const lfo = audioCtx.createOscillator();
+      const lfoGain = audioCtx.createGain();
+      lfo.frequency.value = vibrato.rate || 6;
+      lfoGain.gain.value = vibrato.depth || 8;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      lfo.start(start);
+      lfo.stop(start + dur);
+    }
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    gain.gain.setValueAtTime(vol, start);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+    osc.start(start);
+    osc.stop(start + dur);
+  }
+
+  function playSound(type) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const t = audioCtx.currentTime;
+
+    if (type === 'correct') {
+      // Anime victory jingle — pentatonic sparkle (like Sailor Moon power-up)
+      const notes = [784, 988, 1175, 1319, 1568, 1976]; // G5 B5 D6 E6 G6 B6
+      notes.forEach((f, i) => {
+        playNote(f, 'sine', t + i * 0.07, 0.35, 0.13);
+        playNote(f * 2, 'sine', t + i * 0.07, 0.2, 0.04); // octave shimmer
+      });
+      // Sparkle chimes
+      playNote(2637, 'sine', t + 0.3, 0.4, 0.06, { rate: 12, depth: 15 });
+      playNote(3520, 'sine', t + 0.4, 0.3, 0.04, { rate: 14, depth: 10 });
+      playNote(4186, 'sine', t + 0.5, 0.25, 0.03);
+      // Warm pad underneath
+      playNote(392, 'triangle', t, 0.8, 0.06);
+      playNote(494, 'triangle', t, 0.8, 0.04);
+    } else if (type === 'wrong') {
+      // Anime fail — comical descending "bwah bwah"
+      playNote(523, 'sawtooth', t, 0.15, 0.07);
+      playNote(466, 'sawtooth', t + 0.15, 0.15, 0.07);
+      playNote(349, 'sawtooth', t + 0.3, 0.25, 0.08);
+      playNote(262, 'sawtooth', t + 0.5, 0.4, 0.09);
+      // Wobble effect
+      playNote(262, 'triangle', t + 0.5, 0.5, 0.06, { rate: 4, depth: 20 });
+      // Low thud
+      playNote(80, 'sine', t + 0.55, 0.3, 0.1);
+    } else if (type === 'timeout') {
+      // Anime clock running out — rapid ticks then gong
+      for (let i = 0; i < 5; i++) {
+        playNote(1200, 'square', t + i * 0.08, 0.04, 0.05);
+      }
+      // Dramatic gong
+      playNote(130, 'sine', t + 0.45, 1.0, 0.12, { rate: 2, depth: 5 });
+      playNote(196, 'triangle', t + 0.45, 0.8, 0.06);
+    }
+  }
+
+  // === BACKGROUND MUSIC (cute anime loop) ===
+  let bgMusic = null;
+  let bgMusicGain = null;
+
+  function startBgMusic() {
+    if (bgMusic) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    bgMusicGain = audioCtx.createGain();
+    bgMusicGain.gain.value = 0.04;
+    bgMusicGain.connect(audioCtx.destination);
+
+    // Simple cute pentatonic melody loop
+    const melody = [523, 587, 659, 784, 880, 784, 659, 587]; // C D E G A G E D
+    const noteDur = 0.35;
+    let noteIndex = 0;
+
+    function scheduleNote() {
+      if (!bgMusic) return;
+      const osc = audioCtx.createOscillator();
+      const noteGain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = melody[noteIndex % melody.length];
+      osc.connect(noteGain);
+      noteGain.connect(bgMusicGain);
+      noteGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      noteGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + noteDur);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + noteDur);
+      noteIndex++;
+      bgMusic = setTimeout(scheduleNote, noteDur * 1000);
+    }
+    bgMusic = setTimeout(scheduleNote, 100);
+  }
+
+  function stopBgMusic() {
+    if (bgMusic) {
+      clearTimeout(bgMusic);
+      bgMusic = null;
+    }
+  }
 
   // State
   let questions = [];
@@ -9,9 +117,11 @@
   let score = 0;
   let timer = null;
   let timeLeft = 0;
-  let retryItems = []; // { question, correctAnswer, unit, id }
+  let retryItems = [];
   let retryIdCounter = 0;
   let isRetryRound = false;
+  let globalTimer = null;
+  let globalTimeLeft = 0;
 
   // DOM
   const startScreen = document.getElementById('start-screen');
@@ -30,56 +140,34 @@
   const timerBarFill = document.getElementById('timer-bar-fill');
   const celebration = document.getElementById('celebration');
   const retryList = document.getElementById('retry-list');
-  const robot = document.getElementById('robot');
-  const robotMouth = document.getElementById('robot-mouth');
-  const robotLabel = document.getElementById('robot-label');
+  const globalTimerDisplay = document.getElementById('global-timer');
 
-  // Robot helper
-  function setRobot(state, label, mouth) {
-    robot.className = 'robot ' + state;
-    robotLabel.textContent = label;
-    if (mouth) robotMouth.textContent = mouth;
-    else if (state === 'happy') robotMouth.textContent = '◡';
-    else if (state === 'sad') robotMouth.textContent = '︵';
-    else robotMouth.textContent = '‿';
+  function showScreen(screen) {
+    [startScreen, quizScreen, endScreen].forEach(s => s.classList.remove('active'));
+    screen.classList.add('active');
   }
 
-  // Generate questions — m, dm, cm, mm conversions
   function generateQuestions() {
     const qs = [];
-    // Conversion pairs: [fromUnit, toUnit, factor] where fromValue * factor = toValue
     const conversions = [
-      { from: 'm',  to: 'dm', factor: 10 },
-      { from: 'm',  to: 'cm', factor: 100 },
-      { from: 'm',  to: 'mm', factor: 1000 },
+      { from: 'm', to: 'dm', factor: 10 },
+      { from: 'm', to: 'cm', factor: 100 },
+      { from: 'm', to: 'mm', factor: 1000 },
       { from: 'dm', to: 'cm', factor: 10 },
       { from: 'dm', to: 'mm', factor: 100 },
       { from: 'cm', to: 'mm', factor: 10 },
     ];
-
     for (let i = 0; i < TOTAL_QUESTIONS; i++) {
       const conv = conversions[Math.floor(Math.random() * conversions.length)];
       const reverse = Math.random() < 0.5;
-
       if (!reverse) {
-        // bigger → smaller (multiply)
         const val = randomInt(1, 30);
-        qs.push({
-          text: `Combien font ${val} ${conv.from} en ${conv.to} ?`,
-          answer: val * conv.factor,
-          unit: conv.to
-        });
+        qs.push({ text: `Combien font ${val} ${conv.from} en ${conv.to} ?`, answer: val * conv.factor, unit: conv.to });
       } else {
-        // smaller → bigger (divide) — pick a value that divides cleanly
         const val = randomInt(1, 30) * conv.factor;
-        qs.push({
-          text: `Combien font ${val} ${conv.to} en ${conv.from} ?`,
-          answer: val / conv.factor,
-          unit: conv.from
-        });
+        qs.push({ text: `Combien font ${val} ${conv.to} en ${conv.from} ?`, answer: val / conv.factor, unit: conv.from });
       }
     }
-    // Shuffle
     for (let i = qs.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [qs[i], qs[j]] = [qs[j], qs[i]];
@@ -91,14 +179,45 @@
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  // Screens
   function showScreen(screen) {
     [startScreen, quizScreen, endScreen].forEach(s => s.classList.remove('active'));
     screen.classList.add('active');
   }
 
+  // Global timer
+  function startGlobalTimer() {
+    clearInterval(globalTimer);
+    if (GLOBAL_TIME === 0) {
+      globalTimerDisplay.textContent = '';
+      return;
+    }
+    globalTimeLeft = GLOBAL_TIME;
+    updateGlobalTimerDisplay();
+    globalTimer = setInterval(() => {
+      globalTimeLeft--;
+      updateGlobalTimerDisplay();
+      if (globalTimeLeft <= 0) {
+        clearInterval(globalTimer);
+        clearInterval(timer);
+        playSound('timeout');
+        endQuiz();
+      }
+    }, 1000);
+  }
+
+  function updateGlobalTimerDisplay() {
+    const m = Math.floor(globalTimeLeft / 60);
+    const s = globalTimeLeft % 60;
+    globalTimerDisplay.textContent = `🕐 ${m}:${s.toString().padStart(2, '0')}`;
+    globalTimerDisplay.classList.toggle('warning', globalTimeLeft <= 60 && globalTimeLeft > 0);
+  }
+
   // Start
   function startQuiz() {
+    TOTAL_QUESTIONS = parseInt(document.getElementById('cfg-questions').value);
+    TIME_PER_QUESTION = parseInt(document.getElementById('cfg-time-per-q').value);
+    GLOBAL_TIME = parseInt(document.getElementById('cfg-global-time').value) * 60;
+
     questions = generateQuestions();
     currentIndex = 0;
     score = 0;
@@ -109,10 +228,16 @@
     scoreDisplay.textContent = '0';
     qTotal.textContent = TOTAL_QUESTIONS;
     showScreen(quizScreen);
+    stopBgMusic();
+    startGlobalTimer();
+
+    // Hide per-question timer elements if no timer
+    timerDisplay.style.display = TIME_PER_QUESTION === 0 ? 'none' : '';
+    document.querySelector('.timer-bar').style.display = TIME_PER_QUESTION === 0 ? 'none' : '';
+
     showQuestion();
   }
 
-  // Show question
   function showQuestion() {
     celebration.classList.add('hidden');
     answerInput.value = '';
@@ -129,17 +254,19 @@
 
     questionText.textContent = q.text;
     answerUnit.textContent = q.unit;
-    setRobot('thinking', 'Hmm... 🤔', '○');
-    startTimer();
+    if (TIME_PER_QUESTION > 0) {
+      startTimer();
+    } else {
+      clearInterval(timer);
+      timerDisplay.textContent = '';
+    }
   }
 
-  // Timer
   function startTimer() {
     clearInterval(timer);
     timeLeft = TIME_PER_QUESTION;
     timerBarFill.style.transition = 'none';
     timerBarFill.style.width = '100%';
-    // Force reflow
     void timerBarFill.offsetWidth;
     timerBarFill.style.transition = `width ${TIME_PER_QUESTION}s linear`;
     timerBarFill.style.width = '0%';
@@ -158,59 +285,42 @@
   function updateTimerDisplay() {
     timerDisplay.textContent = `⏱ ${timeLeft}s`;
     timerDisplay.style.color = timeLeft <= 5 ? '#ff4444' : '';
-    if (timeLeft <= 5 && timeLeft > 0) {
-      setRobot('thinking', 'Vite vite ! ⏱', '○');
-    }
   }
 
-  // Timeout — treat as wrong
   function handleTimeout() {
+    playSound('timeout');
     if (!isRetryRound) {
       const q = questions[currentIndex];
       addToRetry(q.text, q.answer, q.unit);
     }
-    setRobot('sad', 'Trop tard ! ⏰', '︵');
     shakeCard();
     setTimeout(nextQuestion, 800);
   }
 
-  // Validate answer
   function validateAnswer() {
     clearInterval(timer);
     const userAnswer = parseFloat(answerInput.value);
-    let q;
-
-    if (!isRetryRound) {
-      q = questions[currentIndex];
-    } else {
-      q = retryItems[0];
-    }
+    let q = !isRetryRound ? questions[currentIndex] : retryItems[0];
 
     if (isNaN(userAnswer)) {
-      startTimer(); // restart timer, ignore empty
+      if (TIME_PER_QUESTION > 0) startTimer();
       return;
     }
 
     if (userAnswer === q.answer) {
-      // Correct
       score++;
       scoreDisplay.textContent = score;
-      setRobot('happy', 'Bravo ! 💗', '◡');
+      playSound('correct');
       celebrate();
-
       if (isRetryRound) {
         removeFromRetry(retryItems[0].id);
         retryItems.shift();
       }
-
       setTimeout(nextQuestion, 3500);
     } else {
-      // Wrong
-      setRobot('sad', 'Oups ! Essaie encore 💪', '︵');
+      playSound('wrong');
       shakeCard();
-      if (!isRetryRound) {
-        addToRetry(q.text, q.answer, q.unit);
-      }
+      if (!isRetryRound) addToRetry(q.text, q.answer, q.unit);
       setTimeout(nextQuestion, 800);
     }
   }
@@ -219,45 +329,34 @@
     if (!isRetryRound) {
       currentIndex++;
       if (currentIndex >= TOTAL_QUESTIONS) {
-        // Check if retry items remain
         if (retryItems.length > 0) {
           isRetryRound = true;
           qTotal.textContent = '🔄';
           showQuestion();
-        } else {
-          endQuiz();
-        }
+        } else { endQuiz(); }
         return;
       }
       showQuestion();
     } else {
-      if (retryItems.length > 0) {
-        showQuestion();
-      } else {
-        endQuiz();
-      }
+      if (retryItems.length > 0) showQuestion();
+      else endQuiz();
     }
   }
 
-  // Retry panel
   function addToRetry(text, answer, unit) {
     const id = retryIdCounter++;
     retryItems.push({ text, answer, unit, id });
     const li = document.createElement('li');
     li.id = `retry-${id}`;
-    li.textContent = `${text} → ${answer} ${unit}`;
+    li.textContent = text;
     retryList.appendChild(li);
   }
 
   function removeFromRetry(id) {
     const li = document.getElementById(`retry-${id}`);
-    if (li) {
-      li.classList.add('correct');
-      setTimeout(() => li.remove(), 500);
-    }
+    if (li) { li.classList.add('correct'); setTimeout(() => li.remove(), 500); }
   }
 
-  // Celebration GIFs
   const CELEBRATION_GIFS = [
     'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2YwODZxZnNmOWpkZTJ1OHMzdjB5OG0xazJ3bnNvYTE4MnF2YWI3NiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QX81mZCxbGlqFtxqYn/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3Z3U2OWU2emc0ZTY2YnJ4ODZnMTJsMjJ3MGlha2UxaXEyNnZqaGEzeSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/FWAcpJsFT9mvrv0e7a/giphy.gif',
@@ -267,7 +366,6 @@
     'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3Nmh3bmxkcXgwcmt0MW95d3Fka2NnOHR4ZmtpcjBhM3Vqd29mbzZ6ZSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/T70hpBP1L0N7U0jtkq/giphy.gif'
   ];
 
-  // Korean encouragement phrases
   const KOREAN_CHEERS = [
     '잘했어! (Bien joué !)',
     '대박! (Génial !)',
@@ -275,7 +373,6 @@
     '최고! (Tu es le/la meilleur(e) !)'
   ];
 
-  // Effects
   function celebrate() {
     const cheer = KOREAN_CHEERS[Math.floor(Math.random() * KOREAN_CHEERS.length)];
     document.querySelector('.celebration-text').textContent = `🎉 ${cheer} 🎉`;
@@ -283,14 +380,10 @@
     celebration.style.animation = 'none';
     void celebration.offsetWidth;
     celebration.style.animation = '';
-    // Random GIF
     const gif = document.getElementById('celebration-gif');
     gif.src = CELEBRATION_GIFS[Math.floor(Math.random() * CELEBRATION_GIFS.length)];
     spawnConfetti();
-    // Start fade-out after 2.5s, animation lasts 1s
-    setTimeout(() => {
-      celebration.classList.add('fading');
-    }, 2500);
+    setTimeout(() => { celebration.classList.add('fading'); }, 2500);
   }
 
   function shakeCard() {
@@ -299,46 +392,25 @@
     setTimeout(() => card.classList.remove('shake'), 500);
   }
 
-  // Mini confetti
   function spawnConfetti() {
     let canvas = document.getElementById('confetti');
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      canvas.id = 'confetti';
-      document.body.appendChild(canvas);
-    }
+    if (!canvas) { canvas = document.createElement('canvas'); canvas.id = 'confetti'; document.body.appendChild(canvas); }
     const ctx = canvas.getContext('2d');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-
     const pieces = [];
     const colors = ['#ff006e', '#ff69b4', '#ffd700', '#fff', '#c9004e'];
     for (let i = 0; i < 40; i++) {
-      pieces.push({
-        x: Math.random() * canvas.width,
-        y: -10,
-        w: Math.random() * 8 + 4,
-        h: Math.random() * 6 + 3,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        vy: Math.random() * 4 + 2,
-        vx: (Math.random() - 0.5) * 4,
-        rot: Math.random() * 360
-      });
+      pieces.push({ x: Math.random() * canvas.width, y: -10, w: Math.random() * 8 + 4, h: Math.random() * 6 + 3,
+        color: colors[Math.floor(Math.random() * colors.length)], vy: Math.random() * 4 + 2, vx: (Math.random() - 0.5) * 4, rot: Math.random() * 360 });
     }
-
     let frames = 0;
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       pieces.forEach(p => {
-        p.y += p.vy;
-        p.x += p.vx;
-        p.rot += 3;
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate((p.rot * Math.PI) / 180);
-        ctx.fillStyle = p.color;
-        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-        ctx.restore();
+        p.y += p.vy; p.x += p.vx; p.rot += 3;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate((p.rot * Math.PI) / 180);
+        ctx.fillStyle = p.color; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
       });
       frames++;
       if (frames < 60) requestAnimationFrame(draw);
@@ -347,43 +419,42 @@
     draw();
   }
 
-  // End
   function endQuiz() {
     clearInterval(timer);
+    clearInterval(globalTimer);
+    stopBgMusic();
     showScreen(endScreen);
-    const pct = Math.round((score / TOTAL_QUESTIONS) * 100);
+    const answered = Math.min(currentIndex, TOTAL_QUESTIONS);
+    const pct = answered > 0 ? Math.round((score / answered) * 100) : 0;
     let msg;
     if (pct === 100) msg = '🏆 Parfait ! Tu es une vraie BLINK ! 🏆';
     else if (pct >= 70) msg = '💗 Super travail ! Continue comme ça !';
     else if (pct >= 40) msg = '✨ Pas mal ! Encore un peu d\'entraînement !';
     else msg = '💪 Courage ! Tu vas y arriver !';
-
     document.getElementById('end-message').textContent = msg;
-    document.getElementById('end-score').textContent = `Score : ${score} / ${TOTAL_QUESTIONS} (${pct}%)`;
-
+    document.getElementById('end-score').textContent = `Score : ${score} / ${answered} (${pct}%)`;
     if (pct >= 70) spawnConfetti();
   }
 
   // Events
   btnStart.addEventListener('click', startQuiz);
-  btnRestart.addEventListener('click', startQuiz);
+  btnRestart.addEventListener('click', () => { stopBgMusic(); showScreen(startScreen); startBgMusic(); });
   btnValidate.addEventListener('click', validateAnswer);
-  answerInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') validateAnswer();
-  });
+  answerInput.addEventListener('keydown', e => { if (e.key === 'Enter') validateAnswer(); });
 
-  // Numpad
+  // Start music on first interaction (needed for mobile autoplay policy)
+  document.addEventListener('click', function initMusic() {
+    startBgMusic();
+    document.removeEventListener('click', initMusic);
+  }, { once: true });
+
   answerInput.setAttribute('readonly', true);
   document.getElementById('numpad').addEventListener('click', e => {
     const btn = e.target.closest('.numpad-btn');
     if (!btn) return;
     const val = btn.dataset.val;
-    if (val === 'del') {
-      answerInput.value = answerInput.value.slice(0, -1);
-    } else if (val === '.') {
-      if (!answerInput.value.includes('.')) answerInput.value += '.';
-    } else {
-      answerInput.value += val;
-    }
+    if (val === 'del') answerInput.value = answerInput.value.slice(0, -1);
+    else if (val === '.') { if (!answerInput.value.includes('.')) answerInput.value += '.'; }
+    else answerInput.value += val;
   });
 })();
