@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Quiz BP">
+  <link rel="apple-touch-icon" href="assests/kawaii.png">
   <title>BLACKPINK Quiz - Conversions m ↔ dm</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
@@ -109,6 +113,12 @@
     <h2 id="end-message"></h2>
     <p id="end-score"></p>
     <button id="btn-restart" class="btn-pink">Rejouer 🎤</button>
+  </div>
+
+  <!-- History panel (desktop only) -->
+  <div id="history-panel" class="history-panel" style="display:none;">
+    <h3>📊 Historique</h3>
+    <ul id="history-list"></ul>
   </div>
 
   <script src="app.js"></script>

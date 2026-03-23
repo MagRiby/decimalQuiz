@@ -1,8 +1,65 @@
+// === VERSION CHECK — must be OUTSIDE the IIFE, runs first ===
+const APP_VERSION = '1.1.0';
+(function checkVersion() {
+  const stored = localStorage.getItem('bp_quiz_version');
+  if (stored && stored !== APP_VERSION) {
+    localStorage.setItem('bp_quiz_version', APP_VERSION);
+    location.reload(true);
+    return;
+  }
+  localStorage.setItem('bp_quiz_version', APP_VERSION);
+})();
+
 (() => {
   // Config — set from start screen
   let TOTAL_QUESTIONS = 40;
-  let TIME_PER_QUESTION = 20; // 0 = no per-question timer
-  let GLOBAL_TIME = 600; // seconds, 0 = unlimited
+  let TIME_PER_QUESTION = 20;
+  let GLOBAL_TIME = 600;
+
+  // === SCORE HISTORY (localStorage) ===
+  const HISTORY_KEY = 'bp_quiz_history';
+  const MAX_HISTORY = 50;
+
+  function isMobileDevice() {
+    return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  }
+
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch { return []; }
+  }
+
+  function saveSession(data) {
+    const history = loadHistory();
+    history.unshift(data);
+    if (history.length > MAX_HISTORY) history.length = MAX_HISTORY;
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const panel = document.getElementById('history-panel');
+    if (!panel) return;
+    const list = document.getElementById('history-list');
+    if (!list) return;
+    const history = loadHistory();
+    if (history.length === 0) {
+      list.innerHTML = '<li class="history-empty">Aucun historique</li>';
+      return;
+    }
+    list.innerHTML = history.map(h => {
+      const d = new Date(h.date);
+      const dateStr = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+      const timeStr = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      const pct = h.answered > 0 ? Math.round((h.score / h.answered) * 100) : 0;
+      return `<li>
+        <span class="h-date">${dateStr} ${timeStr}</span>
+        <span class="h-score">${h.score}/${h.answered} (${pct}%)</span>
+        <span class="h-streak">🔥${h.streak}</span>
+        <span class="h-mode">${h.questions}Q · ${h.timePerQ > 0 ? h.timePerQ + 's' : '∞'}</span>
+      </li>`;
+    }).join('');
+  }
 
   // === AUDIO ENGINE ===
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -33,59 +90,44 @@
   function playSound(type) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
     const t = audioCtx.currentTime;
-
     if (type === 'correct') {
-      // Anime victory jingle — pentatonic sparkle (like Sailor Moon power-up)
-      const notes = [784, 988, 1175, 1319, 1568, 1976]; // G5 B5 D6 E6 G6 B6
+      const notes = [784, 988, 1175, 1319, 1568, 1976];
       notes.forEach((f, i) => {
         playNote(f, 'sine', t + i * 0.07, 0.35, 0.13);
-        playNote(f * 2, 'sine', t + i * 0.07, 0.2, 0.04); // octave shimmer
+        playNote(f * 2, 'sine', t + i * 0.07, 0.2, 0.04);
       });
-      // Sparkle chimes
       playNote(2637, 'sine', t + 0.3, 0.4, 0.06, { rate: 12, depth: 15 });
       playNote(3520, 'sine', t + 0.4, 0.3, 0.04, { rate: 14, depth: 10 });
       playNote(4186, 'sine', t + 0.5, 0.25, 0.03);
-      // Warm pad underneath
       playNote(392, 'triangle', t, 0.8, 0.06);
       playNote(494, 'triangle', t, 0.8, 0.04);
     } else if (type === 'wrong') {
-      // Anime fail — comical descending "bwah bwah"
       playNote(523, 'sawtooth', t, 0.15, 0.07);
       playNote(466, 'sawtooth', t + 0.15, 0.15, 0.07);
       playNote(349, 'sawtooth', t + 0.3, 0.25, 0.08);
       playNote(262, 'sawtooth', t + 0.5, 0.4, 0.09);
-      // Wobble effect
       playNote(262, 'triangle', t + 0.5, 0.5, 0.06, { rate: 4, depth: 20 });
-      // Low thud
       playNote(80, 'sine', t + 0.55, 0.3, 0.1);
     } else if (type === 'timeout') {
-      // Anime clock running out — rapid ticks then gong
-      for (let i = 0; i < 5; i++) {
-        playNote(1200, 'square', t + i * 0.08, 0.04, 0.05);
-      }
-      // Dramatic gong
+      for (let i = 0; i < 5; i++) playNote(1200, 'square', t + i * 0.08, 0.04, 0.05);
       playNote(130, 'sine', t + 0.45, 1.0, 0.12, { rate: 2, depth: 5 });
       playNote(196, 'triangle', t + 0.45, 0.8, 0.06);
     }
   }
 
-  // === BACKGROUND MUSIC (cute anime loop) ===
+  // === BACKGROUND MUSIC ===
   let bgMusic = null;
   let bgMusicGain = null;
 
   function startBgMusic() {
     if (bgMusic) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
-
     bgMusicGain = audioCtx.createGain();
     bgMusicGain.gain.value = 0.04;
     bgMusicGain.connect(audioCtx.destination);
-
-    // Simple cute pentatonic melody loop
-    const melody = [523, 587, 659, 784, 880, 784, 659, 587]; // C D E G A G E D
+    const melody = [523, 587, 659, 784, 880, 784, 659, 587];
     const noteDur = 0.35;
     let noteIndex = 0;
-
     function scheduleNote() {
       if (!bgMusic) return;
       const osc = audioCtx.createOscillator();
@@ -105,13 +147,10 @@
   }
 
   function stopBgMusic() {
-    if (bgMusic) {
-      clearTimeout(bgMusic);
-      bgMusic = null;
-    }
+    if (bgMusic) { clearTimeout(bgMusic); bgMusic = null; }
   }
 
-  // State
+  // === STATE ===
   let questions = [];
   let currentIndex = 0;
   let score = 0;
@@ -122,6 +161,9 @@
   let isRetryRound = false;
   let globalTimer = null;
   let globalTimeLeft = 0;
+  let currentStreak = 0;
+  let bestStreak = 0;
+  let quizActive = false;
 
   // DOM
   const startScreen = document.getElementById('start-screen');
@@ -179,18 +221,10 @@
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  function showScreen(screen) {
-    [startScreen, quizScreen, endScreen].forEach(s => s.classList.remove('active'));
-    screen.classList.add('active');
-  }
-
   // Global timer
   function startGlobalTimer() {
     clearInterval(globalTimer);
-    if (GLOBAL_TIME === 0) {
-      globalTimerDisplay.textContent = '';
-      return;
-    }
+    if (GLOBAL_TIME === 0) { globalTimerDisplay.textContent = ''; return; }
     globalTimeLeft = GLOBAL_TIME;
     updateGlobalTimerDisplay();
     globalTimer = setInterval(() => {
@@ -212,6 +246,23 @@
     globalTimerDisplay.classList.toggle('warning', globalTimeLeft <= 60 && globalTimeLeft > 0);
   }
 
+  // Save current session
+  function saveCurrentSession() {
+    if (!quizActive) return;
+    const answered = Math.min(currentIndex, TOTAL_QUESTIONS);
+    if (answered === 0) return;
+    saveSession({
+      date: new Date().toISOString(),
+      score,
+      answered,
+      questions: TOTAL_QUESTIONS,
+      timePerQ: TIME_PER_QUESTION,
+      globalTime: GLOBAL_TIME,
+      streak: bestStreak
+    });
+    quizActive = false;
+  }
+
   // Start
   function startQuiz() {
     TOTAL_QUESTIONS = parseInt(document.getElementById('cfg-questions').value);
@@ -221,20 +272,20 @@
     questions = generateQuestions();
     currentIndex = 0;
     score = 0;
+    currentStreak = 0;
+    bestStreak = 0;
     retryItems = [];
     retryIdCounter = 0;
     isRetryRound = false;
+    quizActive = true;
     retryList.innerHTML = '';
     scoreDisplay.textContent = '0';
     qTotal.textContent = TOTAL_QUESTIONS;
     showScreen(quizScreen);
     stopBgMusic();
     startGlobalTimer();
-
-    // Hide per-question timer elements if no timer
     timerDisplay.style.display = TIME_PER_QUESTION === 0 ? 'none' : '';
     document.querySelector('.timer-bar').style.display = TIME_PER_QUESTION === 0 ? 'none' : '';
-
     showQuestion();
   }
 
@@ -242,7 +293,6 @@
     celebration.classList.add('hidden');
     answerInput.value = '';
     answerInput.focus();
-
     let q;
     if (!isRetryRound) {
       q = questions[currentIndex];
@@ -251,15 +301,10 @@
       q = retryItems[0];
       qNum.textContent = '🔄';
     }
-
     questionText.textContent = q.text;
     answerUnit.textContent = q.unit;
-    if (TIME_PER_QUESTION > 0) {
-      startTimer();
-    } else {
-      clearInterval(timer);
-      timerDisplay.textContent = '';
-    }
+    if (TIME_PER_QUESTION > 0) startTimer();
+    else { clearInterval(timer); timerDisplay.textContent = ''; }
   }
 
   function startTimer() {
@@ -270,15 +315,11 @@
     void timerBarFill.offsetWidth;
     timerBarFill.style.transition = `width ${TIME_PER_QUESTION}s linear`;
     timerBarFill.style.width = '0%';
-
     updateTimerDisplay();
     timer = setInterval(() => {
       timeLeft--;
       updateTimerDisplay();
-      if (timeLeft <= 0) {
-        clearInterval(timer);
-        handleTimeout();
-      }
+      if (timeLeft <= 0) { clearInterval(timer); handleTimeout(); }
     }, 1000);
   }
 
@@ -289,6 +330,7 @@
 
   function handleTimeout() {
     playSound('timeout');
+    currentStreak = 0;
     if (!isRetryRound) {
       const q = questions[currentIndex];
       addToRetry(q.text, q.answer, q.unit);
@@ -301,23 +343,19 @@
     clearInterval(timer);
     const userAnswer = parseFloat(answerInput.value);
     let q = !isRetryRound ? questions[currentIndex] : retryItems[0];
-
-    if (isNaN(userAnswer)) {
-      if (TIME_PER_QUESTION > 0) startTimer();
-      return;
-    }
+    if (isNaN(userAnswer)) { if (TIME_PER_QUESTION > 0) startTimer(); return; }
 
     if (userAnswer === q.answer) {
       score++;
+      currentStreak++;
+      if (currentStreak > bestStreak) bestStreak = currentStreak;
       scoreDisplay.textContent = score;
       playSound('correct');
       celebrate();
-      if (isRetryRound) {
-        removeFromRetry(retryItems[0].id);
-        retryItems.shift();
-      }
+      if (isRetryRound) { removeFromRetry(retryItems[0].id); retryItems.shift(); }
       setTimeout(nextQuestion, 3500);
     } else {
+      currentStreak = 0;
       playSound('wrong');
       shakeCard();
       if (!isRetryRound) addToRetry(q.text, q.answer, q.unit);
@@ -329,11 +367,8 @@
     if (!isRetryRound) {
       currentIndex++;
       if (currentIndex >= TOTAL_QUESTIONS) {
-        if (retryItems.length > 0) {
-          isRetryRound = true;
-          qTotal.textContent = '🔄';
-          showQuestion();
-        } else { endQuiz(); }
+        if (retryItems.length > 0) { isRetryRound = true; qTotal.textContent = '🔄'; showQuestion(); }
+        else endQuiz();
         return;
       }
       showQuestion();
@@ -380,8 +415,7 @@
     celebration.style.animation = 'none';
     void celebration.offsetWidth;
     celebration.style.animation = '';
-    const gif = document.getElementById('celebration-gif');
-    gif.src = CELEBRATION_GIFS[Math.floor(Math.random() * CELEBRATION_GIFS.length)];
+    document.getElementById('celebration-gif').src = CELEBRATION_GIFS[Math.floor(Math.random() * CELEBRATION_GIFS.length)];
     spawnConfetti();
     setTimeout(() => { celebration.classList.add('fading'); }, 2500);
   }
@@ -396,10 +430,8 @@
     let canvas = document.getElementById('confetti');
     if (!canvas) { canvas = document.createElement('canvas'); canvas.id = 'confetti'; document.body.appendChild(canvas); }
     const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    const pieces = [];
-    const colors = ['#ff006e', '#ff69b4', '#ffd700', '#fff', '#c9004e'];
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    const pieces = [], colors = ['#ff006e', '#ff69b4', '#ffd700', '#fff', '#c9004e'];
     for (let i = 0; i < 40; i++) {
       pieces.push({ x: Math.random() * canvas.width, y: -10, w: Math.random() * 8 + 4, h: Math.random() * 6 + 3,
         color: colors[Math.floor(Math.random() * colors.length)], vy: Math.random() * 4 + 2, vx: (Math.random() - 0.5) * 4, rot: Math.random() * 360 });
@@ -412,8 +444,7 @@
         ctx.save(); ctx.translate(p.x, p.y); ctx.rotate((p.rot * Math.PI) / 180);
         ctx.fillStyle = p.color; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
       });
-      frames++;
-      if (frames < 60) requestAnimationFrame(draw);
+      if (++frames < 60) requestAnimationFrame(draw);
       else ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
     draw();
@@ -423,6 +454,7 @@
     clearInterval(timer);
     clearInterval(globalTimer);
     stopBgMusic();
+    saveCurrentSession();
     showScreen(endScreen);
     const answered = Math.min(currentIndex, TOTAL_QUESTIONS);
     const pct = answered > 0 ? Math.round((score / answered) * 100) : 0;
@@ -432,7 +464,7 @@
     else if (pct >= 40) msg = '✨ Pas mal ! Encore un peu d\'entraînement !';
     else msg = '💪 Courage ! Tu vas y arriver !';
     document.getElementById('end-message').textContent = msg;
-    document.getElementById('end-score').textContent = `Score : ${score} / ${answered} (${pct}%)`;
+    document.getElementById('end-score').textContent = `Score : ${score} / ${answered} (${pct}%) · 🔥 Meilleure série : ${bestStreak}`;
     if (pct >= 70) spawnConfetti();
   }
 
@@ -442,11 +474,11 @@
   btnValidate.addEventListener('click', validateAnswer);
   answerInput.addEventListener('keydown', e => { if (e.key === 'Enter') validateAnswer(); });
 
-  // Start music on first interaction (needed for mobile autoplay policy)
-  document.addEventListener('click', function initMusic() {
-    startBgMusic();
-    document.removeEventListener('click', initMusic);
-  }, { once: true });
+  // Save on page unload (user closes tab / navigates away)
+  window.addEventListener('beforeunload', saveCurrentSession);
+
+  // Start music on first interaction
+  document.addEventListener('click', function initMusic() { startBgMusic(); }, { once: true });
 
   answerInput.setAttribute('readonly', true);
   document.getElementById('numpad').addEventListener('click', e => {
@@ -457,4 +489,10 @@
     else if (val === '.') { if (!answerInput.value.includes('.')) answerInput.value += '.'; }
     else answerInput.value += val;
   });
+
+  // Init history panel (desktop only)
+  if (!isMobileDevice() && window.innerWidth >= 900) {
+    document.getElementById('history-panel').style.display = 'flex';
+    renderHistory();
+  }
 })();

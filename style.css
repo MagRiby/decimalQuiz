@@ -373,3 +373,60 @@ h1 { font-size: 1.8rem; margin-bottom: 0.3rem; position: relative; z-index: 1; }
   font-size: 1.3rem;
   margin-bottom: 0.3rem;
 }
+
+/* History panel — desktop only, fixed right */
+.history-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 240px;
+  height: 100vh;
+  background: rgba(22, 33, 62, 0.95);
+  border-left: 1px solid rgba(255, 105, 180, 0.2);
+  padding: 1rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  overflow-y: auto;
+  backdrop-filter: blur(8px);
+}
+.history-panel h3 {
+  font-size: 0.95rem;
+  color: var(--gold);
+  text-align: center;
+  margin-bottom: 0.6rem;
+  flex-shrink: 0;
+}
+.history-panel ul {
+  list-style: none;
+  flex: 1;
+  overflow-y: auto;
+}
+.history-panel li {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 0.5rem 0.5rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  border-left: 3px solid var(--pink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.5rem;
+}
+.history-panel .history-empty {
+  text-align: center;
+  color: rgba(255,255,255,0.4);
+  border: none;
+  background: none;
+  font-style: italic;
+}
+.h-date { color: rgba(255,255,255,0.5); width: 100%; }
+.h-score { color: var(--gold); font-weight: 700; }
+.h-streak { color: var(--pink-light); }
+.h-mode { color: rgba(255,255,255,0.4); font-size: 0.65rem; }
+
+/* Hide history panel on mobile / small screens */
+@media (max-width: 899px) {
+  .history-panel { display: none !important; }
+}
