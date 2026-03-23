@@ -363,6 +363,23 @@ h1 { font-size: 1.8rem; margin-bottom: 0.3rem; position: relative; z-index: 1; }
   .global-timer-num { font-size: 1.1rem; }
 }
 
+/* Tablet (701px–899px, e.g. iPad portrait) */
+@media (min-width: 701px) and (max-width: 899px) {
+  .quiz-layout { max-width: 700px; }
+  .question-text { font-size: 1.5rem; }
+  .answer-input { width: 180px; font-size: 1.5rem; }
+  .answer-unit { font-size: 1.4rem; }
+  #btn-validate { padding: 1.2rem 4rem; font-size: 1.6rem; }
+  .numpad { max-width: 320px; }
+  .numpad-btn { font-size: 1.6rem; padding: 1rem; }
+  .right-column { width: 200px; min-width: 160px; }
+  .retry-panel li { font-size: 0.85rem; }
+  .top-bar { font-size: 1.2rem; }
+  .config-panel { max-width: 90%; }
+  .config-select { font-size: 1.1rem; padding: 0.6rem 1.2rem; }
+  .config-label { font-size: 0.95rem; }
+}
+
 #quiz-screen.active {
   justify-content: flex-start;
   padding-top: 1.5rem;
