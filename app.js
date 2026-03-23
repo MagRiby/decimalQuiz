@@ -1,5 +1,5 @@
 // === VERSION CHECK — must be OUTSIDE the IIFE, runs first ===
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 (function checkVersion() {
   const stored = localStorage.getItem('bp_quiz_version');
   if (stored && stored !== APP_VERSION) {
@@ -52,11 +52,13 @@ const APP_VERSION = '1.1.0';
       const dateStr = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
       const timeStr = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
       const pct = h.answered > 0 ? Math.round((h.score / h.answered) * 100) : 0;
+      const weak = h.weakest ? `<span class="h-weak">⚠️ ${h.weakest} (${h.weakestCount}×)</span>` : '';
       return `<li>
         <span class="h-date">${dateStr} ${timeStr}</span>
         <span class="h-score">${h.score}/${h.answered} (${pct}%)</span>
         <span class="h-streak">🔥${h.streak}</span>
         <span class="h-mode">${h.questions}Q · ${h.timePerQ > 0 ? h.timePerQ + 's' : '∞'}</span>
+        ${weak}
       </li>`;
     }).join('');
   }
@@ -164,6 +166,7 @@ const APP_VERSION = '1.1.0';
   let currentStreak = 0;
   let bestStreak = 0;
   let quizActive = false;
+  let mistakes = {}; // { "m→dm": 3, "cm→mm": 1, ... }
 
   // DOM
   const startScreen = document.getElementById('start-screen');
@@ -204,10 +207,10 @@ const APP_VERSION = '1.1.0';
       const reverse = Math.random() < 0.5;
       if (!reverse) {
         const val = randomInt(1, 30);
-        qs.push({ text: `Combien font ${val} ${conv.from} en ${conv.to} ?`, answer: val * conv.factor, unit: conv.to });
+        qs.push({ text: `Combien font ${val} ${conv.from} en ${conv.to} ?`, answer: val * conv.factor, unit: conv.to, convType: `${conv.from}→${conv.to}` });
       } else {
         const val = randomInt(1, 30) * conv.factor;
-        qs.push({ text: `Combien font ${val} ${conv.to} en ${conv.from} ?`, answer: val / conv.factor, unit: conv.from });
+        qs.push({ text: `Combien font ${val} ${conv.to} en ${conv.from} ?`, answer: val / conv.factor, unit: conv.from, convType: `${conv.to}→${conv.from}` });
       }
     }
     for (let i = qs.length - 1; i > 0; i--) {
@@ -251,6 +254,12 @@ const APP_VERSION = '1.1.0';
     if (!quizActive) return;
     const answered = Math.min(currentIndex, TOTAL_QUESTIONS);
     if (answered === 0) return;
+    // Find the conversion type with most mistakes
+    let worstConv = '';
+    let worstCount = 0;
+    for (const [conv, count] of Object.entries(mistakes)) {
+      if (count > worstCount) { worstCount = count; worstConv = conv; }
+    }
     saveSession({
       date: new Date().toISOString(),
       score,
@@ -258,7 +267,9 @@ const APP_VERSION = '1.1.0';
       questions: TOTAL_QUESTIONS,
       timePerQ: TIME_PER_QUESTION,
       globalTime: GLOBAL_TIME,
-      streak: bestStreak
+      streak: bestStreak,
+      weakest: worstConv,
+      weakestCount: worstCount
     });
     quizActive = false;
   }
@@ -274,6 +285,7 @@ const APP_VERSION = '1.1.0';
     score = 0;
     currentStreak = 0;
     bestStreak = 0;
+    mistakes = {};
     retryItems = [];
     retryIdCounter = 0;
     isRetryRound = false;
@@ -333,6 +345,7 @@ const APP_VERSION = '1.1.0';
     currentStreak = 0;
     if (!isRetryRound) {
       const q = questions[currentIndex];
+      mistakes[q.convType] = (mistakes[q.convType] || 0) + 1;
       addToRetry(q.text, q.answer, q.unit);
     }
     shakeCard();
@@ -356,6 +369,7 @@ const APP_VERSION = '1.1.0';
       setTimeout(nextQuestion, 3500);
     } else {
       currentStreak = 0;
+      mistakes[q.convType] = (mistakes[q.convType] || 0) + 1;
       playSound('wrong');
       shakeCard();
       if (!isRetryRound) addToRetry(q.text, q.answer, q.unit);

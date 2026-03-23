@@ -442,6 +442,7 @@ h1 { font-size: 1.8rem; margin-bottom: 0.3rem; position: relative; z-index: 1; }
 .h-score { color: var(--gold); font-weight: 700; }
 .h-streak { color: var(--pink-light); }
 .h-mode { color: rgba(255,255,255,0.4); font-size: 0.65rem; }
+.h-weak { color: #ff6b6b; width: 100%; font-size: 0.68rem; }
 
 /* Hide history panel on mobile / small screens */
 @media (max-width: 899px) {
