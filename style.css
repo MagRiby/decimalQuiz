@@ -449,3 +449,73 @@ h1 { font-size: 1.8rem; margin-bottom: 0.3rem; position: relative; z-index: 1; }
 @media (max-width: 899px) {
   .history-panel { display: none !important; }
 }
+
+/* Small button variant */
+.btn-small { padding: 0.5rem 1.5rem; font-size: 0.9rem; }
+
+/* Online scores modal */
+.online-scores-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(4px);
+}
+.online-scores-modal.hidden { display: none; }
+.online-scores-content {
+  background: linear-gradient(135deg, var(--black), #2d1b3d);
+  border: 1px solid rgba(255,105,180,0.3);
+  border-radius: 20px;
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  text-align: center;
+}
+.online-scores-content h3 {
+  color: var(--gold);
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+}
+.online-scores-content ul {
+  list-style: none;
+  margin-bottom: 1rem;
+}
+.online-scores-content li {
+  background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-left: 3px solid var(--pink);
+}
+.online-scores-content li .os-name {
+  font-weight: 700;
+  color: var(--pink-light);
+}
+.online-scores-content li .os-score {
+  color: var(--gold);
+  font-weight: 700;
+}
+.online-scores-content li .os-date {
+  color: rgba(255,255,255,0.4);
+  font-size: 0.72rem;
+}
+.online-scores-content li .os-details {
+  color: rgba(255,255,255,0.6);
+  font-size: 0.75rem;
+}
+.online-scores-content .os-empty {
+  color: rgba(255,255,255,0.4);
+  font-style: italic;
+  border: none;
+  background: none;
+  justify-content: center;
+}

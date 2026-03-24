@@ -1,5 +1,5 @@
 // === VERSION CHECK — must be OUTSIDE the IIFE, runs first ===
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 (function checkVersion() {
   const stored = localStorage.getItem('bp_quiz_version');
   if (stored && stored !== APP_VERSION) {
@@ -9,6 +9,32 @@ const APP_VERSION = '1.3.0';
   }
   localStorage.setItem('bp_quiz_version', APP_VERSION);
 })();
+
+// === FIREBASE INIT ===
+let fbDb = null;
+let fbUid = null;
+try {
+  if (typeof FIREBASE_CONFIG !== 'undefined' && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY') {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fbDb = firebase.database();
+    firebase.auth().signInAnonymously().then(cred => { fbUid = cred.user.uid; }).catch(() => {});
+  }
+} catch (e) { console.warn('Firebase init skipped:', e.message); }
+
+function pushScoreOnline(data) {
+  if (!fbDb) return;
+  fbDb.ref('scores').push(data).catch(() => {});
+}
+
+function fetchOnlineScores(callback) {
+  if (!fbDb) { callback([]); return; }
+  fbDb.ref('scores').orderByChild('date').limitToLast(50).once('value').then(snap => {
+    const results = [];
+    snap.forEach(child => results.push(child.val()));
+    results.reverse();
+    callback(results);
+  }).catch(() => callback([]));
+}
 
 (() => {
   // Config — set from start screen
@@ -167,6 +193,7 @@ const APP_VERSION = '1.3.0';
   let bestStreak = 0;
   let quizActive = false;
   let mistakes = {}; // { "m→dm": 3, "cm→mm": 1, ... }
+  let playerName = '';
 
   // DOM
   const startScreen = document.getElementById('start-screen');
@@ -260,7 +287,7 @@ const APP_VERSION = '1.3.0';
     for (const [conv, count] of Object.entries(mistakes)) {
       if (count > worstCount) { worstCount = count; worstConv = conv; }
     }
-    saveSession({
+    const sessionData = {
       date: new Date().toISOString(),
       score,
       answered,
@@ -270,7 +297,10 @@ const APP_VERSION = '1.3.0';
       streak: bestStreak,
       weakest: worstConv,
       weakestCount: worstCount
-    });
+    };
+    saveSession(sessionData);
+    // Push to Firebase with player name
+    pushScoreOnline({ ...sessionData, player: playerName || 'Anonyme' });
     quizActive = false;
   }
 
@@ -279,6 +309,8 @@ const APP_VERSION = '1.3.0';
     TOTAL_QUESTIONS = parseInt(document.getElementById('cfg-questions').value);
     TIME_PER_QUESTION = parseInt(document.getElementById('cfg-time-per-q').value);
     GLOBAL_TIME = parseInt(document.getElementById('cfg-global-time').value) * 60;
+    playerName = (document.getElementById('cfg-player-name').value || '').trim();
+    if (playerName) localStorage.setItem('bp_player_name', playerName);
 
     questions = generateQuestions();
     currentIndex = 0;
@@ -509,4 +541,45 @@ const APP_VERSION = '1.3.0';
     document.getElementById('history-panel').style.display = 'flex';
     renderHistory();
   }
+
+  // Restore player name from localStorage
+  const savedName = localStorage.getItem('bp_player_name');
+  if (savedName) document.getElementById('cfg-player-name').value = savedName;
+
+  // Online scores modal
+  const onlineModal = document.getElementById('online-scores-modal');
+  const onlineList = document.getElementById('online-scores-list');
+  document.getElementById('btn-online-scores').addEventListener('click', () => {
+    onlineModal.classList.remove('hidden');
+    onlineList.innerHTML = '<li class="os-empty">Chargement...</li>';
+    fetchOnlineScores(scores => {
+      if (scores.length === 0) {
+        onlineList.innerHTML = '<li class="os-empty">Aucun score en ligne</li>';
+        return;
+      }
+      onlineList.innerHTML = scores.map(s => {
+        const d = new Date(s.date);
+        const dateStr = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+        const timeStr = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const pct = s.answered > 0 ? Math.round((s.score / s.answered) * 100) : 0;
+        const weak = s.weakest ? ` · ⚠️${s.weakest}` : '';
+        return `<li>
+          <div>
+            <span class="os-name">${s.player || 'Anonyme'}</span>
+            <span class="os-date">${dateStr} ${timeStr}</span>
+          </div>
+          <div>
+            <span class="os-score">${s.score}/${s.answered} (${pct}%)</span>
+            <span class="os-details">🔥${s.streak}${weak}</span>
+          </div>
+        </li>`;
+      }).join('');
+    });
+  });
+  document.getElementById('btn-close-online').addEventListener('click', () => {
+    onlineModal.classList.add('hidden');
+  });
+  onlineModal.addEventListener('click', e => {
+    if (e.target === onlineModal) onlineModal.classList.add('hidden');
+  });
 })();

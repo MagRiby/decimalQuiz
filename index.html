@@ -11,6 +11,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 </head>
 <body>
   <!-- Start screen -->
@@ -51,6 +54,11 @@
         </select>
       </label>
     </div>
+
+    <label class="config-label">
+      Ton prénom
+      <input type="text" id="cfg-player-name" class="config-select" placeholder="Ex: Lisa" maxlength="20" style="text-align:center;">
+    </label>
 
     <button id="btn-start" class="btn-pink">Commencer 🎤</button>
   </div>
@@ -112,7 +120,17 @@
     <div class="logo">💗 BLACKPINK 💗</div>
     <h2 id="end-message"></h2>
     <p id="end-score"></p>
+    <button id="btn-online-scores" class="btn-pink btn-small" style="margin-bottom:0.8rem;">📊 Scores en ligne</button>
     <button id="btn-restart" class="btn-pink">Rejouer 🎤</button>
+  </div>
+
+  <!-- Online scores modal -->
+  <div id="online-scores-modal" class="online-scores-modal hidden">
+    <div class="online-scores-content">
+      <h3>📊 Scores en ligne</h3>
+      <ul id="online-scores-list"></ul>
+      <button id="btn-close-online" class="btn-pink btn-small">Fermer</button>
+    </div>
   </div>
 
   <!-- History panel (desktop only) -->
@@ -121,6 +139,7 @@
     <ul id="history-list"></ul>
   </div>
 
+  <script src="firebase-config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
