@@ -1,5 +1,5 @@
 // === VERSION CHECK — must be OUTSIDE the IIFE, runs first ===
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 (function checkVersion() {
   const stored = localStorage.getItem('bp_quiz_version');
   if (stored && stored !== APP_VERSION) {
